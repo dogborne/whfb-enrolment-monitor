@@ -69,6 +69,23 @@ Exit codes:
 | `1` | At or above warning threshold |
 | `2` | Could not inspect the local NGC store |
 
+Where this is reported in Intune:
+
+1. Go to **Intune admin center**.
+2. Open **Devices** > **Scripts and remediations** > **Remediations**.
+3. Select the WHfB enrolment detection package.
+4. Open **Monitor** > **Device status**.
+
+Intune uses the detection script exit code to determine whether the device is healthy or has an issue:
+
+| Detection exit code | Intune interpretation |
+|---:|---|
+| `0` | No issue detected |
+| `1` | Issue detected; run remediation if a remediation script is configured |
+| `2` | Detection failed or could not complete successfully |
+
+The script also writes structured output, including the device name, count, threshold and status. This appears in the remediation run output/device status details, subject to Intune output-size limits. For central reporting, export the device status report from Intune or collect the JSON output into Log Analytics using a separate collection workflow.
+
 No remediation script is included by default because deleting WHfB/NGC artefacts is disruptive and should not be automated without a support process. Use the detection output to trigger a review of the device, user assignment pattern, and any stale local profiles.
 
 ## Example
