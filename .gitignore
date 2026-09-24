@@ -1,0 +1,8 @@
+.vscode/
+*.log
+*.csv
+*.json
+*.xml
+*.zip
+*.bak
+Thumbs.db
