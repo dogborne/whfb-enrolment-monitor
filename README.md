@@ -15,6 +15,14 @@ This is useful for shared devices, labs, kiosk-like scenarios, front-counter mac
 - Returns a clear status of `OK`, `Warning`, or `AtLimit`.
 - Can export the evidence rows to CSV.
 
+`Test-WhfbLocalEnrollmentCount.ps1`:
+
+- Runs directly on a Windows device.
+- Inspects the local Windows Hello for Business NGC store.
+- Counts local WHfB enrolment artefacts even when historic Graph/audit evidence is incomplete.
+- Is designed for Intune remediation detection scripts.
+- Exits `1` when the warning threshold is reached so the device is reported as requiring attention.
+
 ## Required Microsoft Graph permissions
 
 Create an Entra app registration using certificate authentication or managed identity. For certificate authentication, grant the app these **application permissions** and provide admin consent:
@@ -27,6 +35,41 @@ Create an Entra app registration using certificate authentication or managed ide
 | `DeviceManagementManagedDevices.Read.All` | Optional | Useful if extending the script to resolve Intune managed device metadata |
 
 The script does **not** require write permissions.
+
+## Local device detection with Intune remediations
+
+For devices that may already have historic WHfB enrolments, local detection is more reliable than central Graph-only reporting. Deploy `Test-WhfbLocalEnrollmentCount.ps1` as an **Intune remediation detection script**.
+
+Recommended Intune settings:
+
+| Setting | Value |
+|---|---|
+| Run this script using the logged-on credentials | No |
+| Enforce script signature check | No, unless you sign the script |
+| Run script in 64-bit PowerShell | Yes |
+| Schedule | Daily |
+
+The local detection script requires no Microsoft Graph permissions. It should run as **Local System** so it can read the protected NGC store at:
+
+```text
+C:\Windows\ServiceProfiles\LocalService\AppData\Local\Microsoft\NGC
+```
+
+Example local run:
+
+```powershell
+.\Test-WhfbLocalEnrollmentCount.ps1 -WarningThreshold 8 -LimitThreshold 10 -Json
+```
+
+Exit codes:
+
+| Exit code | Meaning |
+|---:|---|
+| `0` | Below warning threshold |
+| `1` | At or above warning threshold |
+| `2` | Could not inspect the local NGC store |
+
+No remediation script is included by default because deleting WHfB/NGC artefacts is disruptive and should not be automated without a support process. Use the detection output to trigger a review of the device, user assignment pattern, and any stale local profiles.
 
 ## Example
 
@@ -57,4 +100,5 @@ Users           : user1@contoso.com; user2@contoso.com
 - WHfB authentication method `displayName` can sometimes be blank even when setup completed successfully. For that reason, use `-IncludeRecentRegistrationEvents` (enabled by default) and grant `AuditLog.Read.All`.
 - If a device is already close to the limit from historic WHfB registrations, the script can identify those registrations only when the WHfB method still has the target device name, or when matching device-registration events are still available in sign-in logs.
 - Sign-in log retention depends on the tenant's licensing and audit configuration. If the WHfB method has a blank device name and the relevant sign-in logs have expired, Microsoft Graph does not provide a reliable central way to reconstruct which device that older WHfB method belongs to. Start collecting this report before devices reach the threshold, and retain the outputs as your longitudinal evidence.
+- For historic devices, deploy the local detection script. It reads the device-side NGC store and does not depend on Graph sign-in log retention.
 - For shared devices approaching the limit, review stale registrations, reduce the number of WHfB users on the device, or consider FIDO2 security keys for high-user-count shared-device scenarios.
