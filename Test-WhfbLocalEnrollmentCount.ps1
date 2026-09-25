@@ -50,6 +50,8 @@ function New-Result {
 
         [string[]] $ContainerNames = @(),
 
+        [string[]] $UnknownContainerNames = @(),
+
         [string] $Message
     )
 
@@ -62,6 +64,7 @@ function New-Result {
         Status           = $Status
         Sids             = $Sids
         ContainerNames   = $ContainerNames
+        UnknownContainers = $UnknownContainerNames
         Message          = $Message
         CheckedAtUtc     = (Get-Date).ToUniversalTime().ToString('o')
     }
@@ -108,10 +111,26 @@ try {
         Select-Object -ExpandProperty Name -Unique |
         Sort-Object
 
-    # On some builds the local NGC store may not expose SID-named directories to
-    # normal enumeration. If no SIDs are visible, fall back to top-level NGC
-    # containers as a conservative local device artefact count.
-    $topLevelContainers = Get-ChildItem -LiteralPath $NgcPath -Directory -Force -ErrorAction Stop |
+    $topLevelContainers = Get-ChildItem -LiteralPath $NgcPath -Directory -Force -ErrorAction Stop
+
+    # Current Windows builds can store each enrolled user's Hello data in a
+    # GUID-named container. PregenPool is a system cache and is not an enrolment.
+    $userContainers = $topLevelContainers |
+        Where-Object {
+            $_.Name -ne 'PregenPool' -and
+            (Test-Path -LiteralPath (Join-Path $_.FullName 'Container.json') -PathType Leaf) -and
+            (Test-Path -LiteralPath (Join-Path $_.FullName 'Protectors.json') -PathType Leaf)
+        }
+
+    $unknownContainers = $topLevelContainers |
+        Where-Object {
+            $_.Name -ne 'PregenPool' -and
+            $_.FullName -notin @($userContainers.FullName)
+        } |
+        Select-Object -ExpandProperty Name |
+        Sort-Object
+
+    $containerNames = $userContainers |
         Select-Object -ExpandProperty Name |
         Sort-Object
 
@@ -120,8 +139,8 @@ try {
         $message = 'Counted distinct user SIDs found in the local NGC store.'
     }
     else {
-        $count = @($topLevelContainers).Count
-        $message = 'No SID-named folders were visible. Counted top-level NGC containers instead.'
+        $count = @($userContainers).Count
+        $message = 'No SID-named folders were visible. Counted validated WHfB containers and excluded system cache folders.'
     }
 
     $status = if ($count -ge $LimitThreshold) {
@@ -138,7 +157,8 @@ try {
         -Status $status `
         -EnrollmentCount $count `
         -Sids @($sids) `
-        -ContainerNames @($topLevelContainers) `
+        -ContainerNames @($containerNames) `
+        -UnknownContainerNames @($unknownContainers) `
         -Message $message
 
     Write-ResultOutput -Result $result
@@ -159,4 +179,3 @@ catch {
 
     exit 2
 }
-
