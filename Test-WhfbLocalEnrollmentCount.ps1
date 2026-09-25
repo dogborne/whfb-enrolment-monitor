@@ -66,6 +66,26 @@ function New-Result {
         CheckedAtUtc     = (Get-Date).ToUniversalTime().ToString('o')
     }
 }
+function Write-ResultOutput {
+    param(
+        [Parameter(Mandatory)]
+        [psobject] $Result
+    )
+
+    if ($Json) {
+        $Result | ConvertTo-Json -Depth 5 -Compress
+        return
+    }
+
+    Write-Output ('ComputerName={0};EnrollmentCount={1};Status={2};WarningThreshold={3};LimitThreshold={4};Message={5};CheckedAtUtc={6}' -f `
+        $Result.ComputerName,
+        $Result.EnrollmentCount,
+        $Result.Status,
+        $Result.WarningThreshold,
+        $Result.LimitThreshold,
+        $Result.Message,
+        $Result.CheckedAtUtc)
+}
 
 try {
     if (-not (Test-Path -LiteralPath $NgcPath)) {
@@ -74,12 +94,7 @@ try {
             -EnrollmentCount 0 `
             -Message 'NGC folder was not found. No local WHfB enrolment artefacts were detected.'
 
-        if ($Json) {
-            $result | ConvertTo-Json -Depth 5 -Compress
-        }
-        else {
-            $result | Format-List
-        }
+        Write-ResultOutput -Result $result
 
         exit 0
     }
@@ -126,12 +141,7 @@ try {
         -ContainerNames @($topLevelContainers) `
         -Message $message
 
-    if ($Json) {
-        $result | ConvertTo-Json -Depth 5 -Compress
-    }
-    else {
-        $result | Format-List
-    }
+    Write-ResultOutput -Result $result
 
     if ($count -ge $WarningThreshold) {
         exit 1
@@ -145,12 +155,8 @@ catch {
         -EnrollmentCount 0 `
         -Message "Could not inspect the local NGC store. Run as Local System or elevated administrator. $($_.Exception.Message)"
 
-    if ($Json) {
-        $result | ConvertTo-Json -Depth 5 -Compress
-    }
-    else {
-        $result | Format-List
-    }
+    Write-ResultOutput -Result $result
 
     exit 2
 }
+
